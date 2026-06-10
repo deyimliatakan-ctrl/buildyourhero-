@@ -25,16 +25,25 @@
     const { useState, useEffect } = React;
 
     // --- Firebase Başlatma ---
-  const myCustomFirebaseConfig = {
+    const myCustomFirebaseConfig = {
       apiKey: "AIzaSyBGfbDHmKIqh30qIK33NONjkOBEGlXPO2s",
-  authDomain: "buildyourhero.firebaseapp.com",
-  databaseURL: "https://buildyourhero-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "buildyourhero",
-  storageBucket: "buildyourhero.firebasestorage.app",
-  messagingSenderId: "867278580042",
-  appId: "1:867278580042:web:7ecd0d9890a9128f5f39b3",
-  measurementId: "G-99QCXX7LMD"
+      authDomain: "buildyourhero.firebaseapp.com",
+      databaseURL: "https://buildyourhero-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "buildyourhero",
+      storageBucket: "buildyourhero.firebasestorage.app",
+      messagingSenderId: "867278580042",
+      appId: "1:867278580042:web:7ecd0d9890a9128f5f39b3",
+      measurementId: "G-99QCXX7LMD"
     };
+
+    let app, auth, db;
+    try {
+      app = initializeApp(myCustomFirebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+    } catch (error) {
+      console.error("Firebase başlatılamadı:", error);
+    }
 
     // --- İkonlar ---
     const TrophyIcon = ({ className }) => (
