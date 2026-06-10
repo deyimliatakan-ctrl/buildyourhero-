@@ -17,10 +17,26 @@
 <body class="bg-zinc-950 text-zinc-100 font-sans selection:bg-zinc-800 overflow-x-hidden">
   <div id="root"></div>
 
-  <script type="text/babel">
+  <script type="text/babel" data-type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
     const { useState, useEffect } = React;
 
-    // --- İkonlar (Dış paket derdinden kurtulmak için) ---
+    // --- Firebase Başlatma ---
+    let app, auth, db;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'build-your-hero-app';
+    try {
+      const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+      app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+    } catch (error) {
+      console.error("Firebase başlatılamadı:", error);
+    }
+
+    // --- İkonlar ---
     const TrophyIcon = ({ className }) => (
       <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
     );
@@ -84,6 +100,56 @@
       { id: 'm48', name: 'Kraven', universe: 'Marvel', stats: { pow: 70, int: 80, spd: 86, dur: 70, com: 91, mag: 10, agi: 86, cha: 81, ldr: 50, cos: 0 } },
       { id: 'm49', name: 'Mysterio', universe: 'Marvel', stats: { pow: 50, int: 91, spd: 70, dur: 61, com: 53, mag: 80, agi: 40, cha: 76, ldr: 30, cos: 0 } },
       { id: 'm50', name: 'Sandman', universe: 'Marvel', stats: { pow: 83, int: 40, spd: 40, dur: 92, com: 54, mag: 0, agi: 33, cha: 60, ldr: 20, cos: 0 } },
+      { id: 'm51', name: 'Jean Grey', universe: 'Marvel', stats: { pow: 70, int: 84, spd: 65, dur: 82, com: 77, mag: 95, agi: 62, cha: 85, ldr: 85, cos: 95 } },
+      { id: 'm52', name: 'Emma Frost', universe: 'Marvel', stats: { pow: 65, int: 90, spd: 50, dur: 94, com: 66, mag: 85, agi: 60, cha: 89, ldr: 85, cos: 10 } },
+      { id: 'm53', name: 'Juggernaut', universe: 'Marvel', stats: { pow: 98, int: 40, spd: 62, dur: 100, com: 69, mag: 10, agi: 20, cha: 40, ldr: 24, cos: 10 } },
+      { id: 'm54', name: 'Sabretooth', universe: 'Marvel', stats: { pow: 80, int: 56, spd: 82, dur: 93, com: 93, mag: 0, agi: 61, cha: 60, ldr: 30, cos: 0 } },
+      { id: 'm55', name: 'Mystique', universe: 'Marvel', stats: { pow: 73, int: 87, spd: 76, dur: 50, com: 95, mag: 0, agi: 95, cha: 86, ldr: 66, cos: 0 } },
+      { id: 'm56', name: 'Quicksilver', universe: 'Marvel', stats: { pow: 75, int: 62, spd: 100, dur: 54, com: 72, mag: 10, agi: 100, cha: 79, ldr: 50, cos: 0 } },
+      { id: 'm57', name: 'Nova', universe: 'Marvel', stats: { pow: 83, int: 78, spd: 95, dur: 86, com: 72, mag: 40, agi: 87, cha: 80, ldr: 80, cos: 95 } },
+      { id: 'm58', name: 'Adam Warlock', universe: 'Marvel', stats: { pow: 85, int: 90, spd: 80, dur: 85, com: 70, mag: 95, agi: 70, cha: 80, ldr: 85, cos: 95 } },
+      { id: 'm59', name: 'Drax', universe: 'Marvel', stats: { pow: 85, int: 49, spd: 54, dur: 90, com: 94, mag: 0, agi: 62, cha: 60, ldr: 40, cos: 10 } },
+      { id: 'm60', name: 'Rocket', universe: 'Marvel', stats: { pow: 50, int: 95, spd: 80, dur: 44, com: 78, mag: 0, agi: 90, cha: 84, ldr: 85, cos: 10 } },
+      { id: 'm61', name: 'Mantis', universe: 'Marvel', stats: { pow: 40, int: 65, spd: 60, dur: 50, com: 80, mag: 85, agi: 80, cha: 74, ldr: 46, cos: 10 } },
+      { id: 'm62', name: 'Nebula', universe: 'Marvel', stats: { pow: 70, int: 83, spd: 75, dur: 86, com: 93, mag: 0, agi: 82, cha: 56, ldr: 68, cos: 10 } },
+      { id: 'm63', name: 'Yondu', universe: 'Marvel', stats: { pow: 60, int: 71, spd: 52, dur: 53, com: 79, mag: 20, agi: 65, cha: 86, ldr: 88, cos: 10 } },
+      { id: 'm64', name: 'Ronan', universe: 'Marvel', stats: { pow: 85, int: 71, spd: 58, dur: 92, com: 87, mag: 50, agi: 50, cha: 82, ldr: 90, cos: 80 } },
+      { id: 'm65', name: 'Kang', universe: 'Marvel', stats: { pow: 70, int: 98, spd: 71, dur: 83, com: 72, mag: 80, agi: 60, cha: 78, ldr: 90, cos: 80 } },
+      { id: 'm66', name: 'Ultron', universe: 'Marvel', stats: { pow: 95, int: 99, spd: 75, dur: 96, com: 82, mag: 30, agi: 40, cha: 60, ldr: 90, cos: 30 } },
+      { id: 'm67', name: 'Doctor Doom', universe: 'Marvel', stats: { pow: 80, int: 100, spd: 58, dur: 91, com: 84, mag: 95, agi: 50, cha: 95, ldr: 100, cos: 70 } },
+      { id: 'm68', name: 'Green Goblin', universe: 'Marvel', stats: { pow: 70, int: 91, spd: 78, dur: 70, com: 74, mag: 0, agi: 78, cha: 80, ldr: 70, cos: 0 } },
+      { id: 'm69', name: 'Doc Ock', universe: 'Marvel', stats: { pow: 70, int: 94, spd: 60, dur: 78, com: 73, mag: 0, agi: 55, cha: 75, ldr: 70, cos: 0 } },
+      { id: 'm70', name: 'Kingpin', universe: 'Marvel', stats: { pow: 90, int: 74, spd: 10, dur: 97, com: 87, mag: 0, agi: 30, cha: 91, ldr: 95, cos: 0 } },
+      { id: 'm71', name: 'Bullseye', universe: 'Marvel', stats: { pow: 75, int: 69, spd: 81, dur: 77, com: 98, mag: 0, agi: 89, cha: 82, ldr: 50, cos: 0 } },
+      { id: 'm72', name: 'Taskmaster', universe: 'Marvel', stats: { pow: 75, int: 84, spd: 75, dur: 74, com: 99, mag: 0, agi: 85, cha: 70, ldr: 70, cos: 0 } },
+      { id: 'm73', name: 'Carnage', universe: 'Marvel', stats: { pow: 85, int: 56, spd: 81, dur: 83, com: 81, mag: 0, agi: 85, cha: 60, ldr: 20, cos: 10 } },
+      { id: 'm74', name: 'Shang-Chi', universe: 'Marvel', stats: { pow: 81, int: 75, spd: 75, dur: 77, com: 100, mag: 85, agi: 94, cha: 77, ldr: 61, cos: 10 } },
+      { id: 'm75', name: 'Iron Fist', universe: 'Marvel', stats: { pow: 81, int: 75, spd: 75, dur: 80, com: 100, mag: 85, agi: 95, cha: 80, ldr: 65, cos: 10 } },
+      { id: 'm76', name: 'Luke Cage', universe: 'Marvel', stats: { pow: 90, int: 62, spd: 50, dur: 100, com: 84, mag: 0, agi: 40, cha: 85, ldr: 83, cos: 0 } },
+      { id: 'm77', name: 'Jessica Jones', universe: 'Marvel', stats: { pow: 86, int: 82, spd: 61, dur: 84, com: 75, mag: 0, agi: 70, cha: 80, ldr: 58, cos: 0 } },
+      { id: 'm78', name: 'She-Hulk', universe: 'Marvel', stats: { pow: 95, int: 85, spd: 60, dur: 94, com: 78, mag: 0, agi: 76, cha: 85, ldr: 70, cos: 0 } },
+      { id: 'm79', name: 'War Machine', universe: 'Marvel', stats: { pow: 80, int: 78, spd: 86, dur: 88, com: 82, mag: 0, agi: 50, cha: 76, ldr: 82, cos: 0 } },
+      { id: 'm80', name: 'Falcon', universe: 'Marvel', stats: { pow: 70, int: 78, spd: 82, dur: 70, com: 88, mag: 0, agi: 90, cha: 80, ldr: 80, cos: 0 } },
+      { id: 'm81', name: 'Winter Soldier', universe: 'Marvel', stats: { pow: 85, int: 70, spd: 80, dur: 86, com: 98, mag: 0, agi: 82, cha: 85, ldr: 59, cos: 0 } },
+      { id: 'm82', name: 'Baron Zemo', universe: 'Marvel', stats: { pow: 45, int: 90, spd: 50, dur: 45, com: 80, mag: 0, agi: 65, cha: 85, ldr: 90, cos: 0 } },
+      { id: 'm83', name: 'Red Skull', universe: 'Marvel', stats: { pow: 65, int: 90, spd: 50, dur: 50, com: 80, mag: 50, agi: 60, cha: 90, ldr: 99, cos: 60 } },
+      { id: 'm84', name: 'Abomination', universe: 'Marvel', stats: { pow: 92, int: 65, spd: 60, dur: 96, com: 65, mag: 0, agi: 40, cha: 50, ldr: 40, cos: 0 } },
+      { id: 'm85', name: 'Leader', universe: 'Marvel', stats: { pow: 50, int: 98, spd: 30, dur: 30, com: 20, mag: 40, agi: 30, cha: 60, ldr: 80, cos: 10 } },
+      { id: 'm86', name: 'Heimdall', universe: 'Marvel', stats: { pow: 85, int: 80, spd: 60, dur: 90, com: 90, mag: 90, agi: 60, cha: 80, ldr: 78, cos: 50 } },
+      { id: 'm87', name: 'Valkyrie', universe: 'Marvel', stats: { pow: 80, int: 60, spd: 70, dur: 85, com: 95, mag: 20, agi: 75, cha: 75, ldr: 80, cos: 10 } },
+      { id: 'm88', name: 'Hela', universe: 'Marvel', stats: { pow: 95, int: 80, spd: 75, dur: 90, com: 95, mag: 95, agi: 70, cha: 90, ldr: 90, cos: 70 } },
+      { id: 'm89', name: 'Surtur', universe: 'Marvel', stats: { pow: 100, int: 50, spd: 40, dur: 95, com: 70, mag: 90, agi: 30, cha: 80, ldr: 80, cos: 100 } },
+      { id: 'm90', name: 'Odin', universe: 'Marvel', stats: { pow: 100, int: 90, spd: 80, dur: 95, com: 90, mag: 100, agi: 50, cha: 100, ldr: 100, cos: 100 } },
+      { id: 'm91', name: 'Dormammu', universe: 'Marvel', stats: { pow: 100, int: 86, spd: 75, dur: 100, com: 70, mag: 100, agi: 50, cha: 90, ldr: 90, cos: 100 } },
+      { id: 'm92', name: 'Mephisto', universe: 'Marvel', stats: { pow: 90, int: 95, spd: 80, dur: 95, com: 60, mag: 100, agi: 60, cha: 100, ldr: 90, cos: 86 } },
+      { id: 'm93', name: 'Spider-Gwen', universe: 'Marvel', stats: { pow: 79, int: 79, spd: 89, dur: 65, com: 85, mag: 0, agi: 98, cha: 85, ldr: 50, cos: 0 } },
+      { id: 'm94', name: 'Miles Morales', universe: 'Marvel', stats: { pow: 82, int: 80, spd: 90, dur: 60, com: 80, mag: 30, agi: 100, cha: 80, ldr: 50, cos: 0 } },
+      { id: 'm95', name: 'Vulture', universe: 'Marvel', stats: { pow: 75, int: 85, spd: 80, dur: 50, com: 60, mag: 0, agi: 70, cha: 40, ldr: 30, cos: 0 } },
+      { id: 'm96', name: 'Electro', universe: 'Marvel', stats: { pow: 75, int: 60, spd: 80, dur: 60, com: 60, mag: 20, agi: 70, cha: 40, ldr: 30, cos: 0 } },
+      { id: 'm97', name: 'Rhino', universe: 'Marvel', stats: { pow: 90, int: 30, spd: 70, dur: 95, com: 70, mag: 0, agi: 10, cha: 20, ldr: 20, cos: 0 } },
+      { id: 'm98', name: 'Lizard', universe: 'Marvel', stats: { pow: 81, int: 88, spd: 70, dur: 85, com: 75, mag: 0, agi: 70, cha: 20, ldr: 10, cos: 0 } },
+      { id: 'm99', name: 'Shocker', universe: 'Marvel', stats: { pow: 70, int: 65, spd: 50, dur: 55, com: 60, mag: 0, agi: 50, cha: 40, ldr: 30, cos: 0 } },
+      { id: 'm100', name: 'Invisible Woman', universe: 'Marvel', stats: { pow: 60, int: 80, spd: 65, dur: 80, com: 65, mag: 30, agi: 74, cha: 100, ldr: 90, cos: 40 } },
       
       // ===================== DC =====================
       { id: 'd1', name: 'Superman', universe: 'DC', stats: { pow: 100, int: 80, spd: 98, dur: 99, com: 85, mag: 0, agi: 80, cha: 100, ldr: 95, cos: 90 } },
@@ -140,15 +206,6 @@
 
     const CATEGORY_IDS = ['pow', 'int', 'spd', 'dur', 'com', 'mag', 'agi', 'cha', 'ldr', 'cos'];
     const MAX_SKIPS = 3;
-
-    // Başlangıç Canlı Sıralama (Mock Leaderboard)
-    const INITIAL_LEADERBOARD = [
-      { id: 'mock1', name: 'Galacticus', score: 965, isUser: false },
-      { id: 'mock2', name: 'Nova Prime', score: 890, isUser: false },
-      { id: 'mock3', name: 'Dark Avenger', score: 815, isUser: false },
-      { id: 'mock4', name: 'Steel Guardian', score: 740, isUser: false },
-      { id: 'mock5', name: 'Mystic Hand', score: 650, isUser: false }
-    ];
 
     // --- Dil Sözlüğü (TR & EN) ---
     const T = {
@@ -255,11 +312,47 @@
       const [gameOver, setGameOver] = useState(false);
       const [hoveredCategory, setHoveredCategory] = useState(null);
       
-      const [leaderboard, setLeaderboard] = useState(INITIAL_LEADERBOARD);
-      const [userRank, setUserRank] = useState(null);
+      const [user, setUser] = useState(null);
+      const [leaderboard, setLeaderboard] = useState([]);
       const [currentRunId, setCurrentRunId] = useState(null);
 
       const t = T[lang];
+
+      // --- Firebase Auth ---
+      useEffect(() => {
+        if (!auth) return;
+        const initAuth = async () => {
+          try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+              await signInAnonymously(auth);
+            }
+          } catch (error) {
+            console.error("Giriş yapılamadı:", error);
+          }
+        };
+        initAuth();
+        const unsubscribe = onAuthStateChanged(auth, setUser);
+        return () => unsubscribe();
+      }, []);
+
+      // --- Firebase Firestore Leaderboard Dinleyici ---
+      useEffect(() => {
+        if (!user || !db) return;
+        const lbRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+        
+        const unsubscribe = onSnapshot(lbRef, (snapshot) => {
+          const data = snapshot.docs.map(docItem => ({ id: docItem.id, ...docItem.data() }));
+          // Puanlarına göre en yüksekten en düşüğe sırala
+          data.sort((a, b) => b.score - a.score);
+          setLeaderboard(data);
+        }, (error) => {
+          console.error("Leaderboard verisi çekilemedi:", error);
+        });
+
+        return () => unsubscribe();
+      }, [user]);
 
       const selectRandomHero = (filter, usedIds) => {
         let pool = HEROES.filter(h => !usedIds.includes(h.id));
@@ -305,7 +398,7 @@
       const handleUniverseChange = (filter) => {
         if(filter === universeFilter) return; 
         setUniverseFilter(filter);
-        if(!gameStarted) return; // Başlamadıysa sadece filtreyi değiştir, kart çekme
+        if(!gameStarted) return;
 
         setSlots({});
         setUsedHeroIds([]);
@@ -328,19 +421,25 @@
         setSlots(newSlots);
         setCurrentHero(null);
 
-        // Kahraman Tamamlandığında (10 slot doldu) Leaderboard işlemleri
+        // Kahraman Tamamlandığında (10 slot doldu) Firestore'a Kaydet
         if (Object.keys(newSlots).length === 10) {
           const finalScore = Object.entries(newSlots).reduce((total, [cId, h]) => total + (h ? h.stats[cId] : 0), 0);
-          const runId = Date.now();
-          const newEntry = { id: runId, name: heroName, score: finalScore, isUser: true };
-          
-          let newLb = [...leaderboard, newEntry].sort((a, b) => b.score - a.score);
-          setLeaderboard(newLb);
-          
-          const rank = newLb.findIndex(e => e.id === runId) + 1;
-          setUserRank(rank);
-          setCurrentRunId(runId);
           setGameOver(true);
+
+          if (user && db) {
+            const lbRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+            const newDocRef = doc(lbRef); // ID'yi önceden oluştur
+            
+            setCurrentRunId(newDocRef.id);
+            
+            // Veritabanına yaz
+            setDoc(newDocRef, {
+              name: heroName,
+              score: finalScore,
+              userId: user.uid,
+              timestamp: Date.now()
+            }).catch(error => console.error("Skor kaydedilemedi:", error));
+          }
         } else {
           drawHero();
         }
@@ -355,7 +454,6 @@
       };
 
       const handleReset = () => {
-        // En başa dön, kullanıcının ismiyle yeni bir simülasyon başlatabilmesi için
         setGameStarted(false);
         setHeroNameInput('');
         setHeroName('');
@@ -364,7 +462,6 @@
         setSkipsLeft(MAX_SKIPS);
         setGameOver(false);
         setCurrentHero(null);
-        setUserRank(null);
         setCurrentRunId(null);
       };
 
@@ -373,6 +470,18 @@
       }, 0);
 
       const heroLevel = getHeroLevel(totalScore, lang);
+
+      // --- Kullanıcının Canlı Sıralamasını Bul ---
+      let userRank = null;
+      if (currentRunId && leaderboard.length > 0) {
+        const rankIndex = leaderboard.findIndex(e => e.id === currentRunId);
+        if (rankIndex !== -1) {
+          userRank = rankIndex + 1;
+        }
+      }
+
+      const top10 = leaderboard.slice(0, 10);
+      const isUserInTop10 = top10.some(e => e.id === currentRunId);
 
       return (
         <div className="min-h-screen flex flex-col relative">
@@ -386,7 +495,6 @@
               </div>
               
               <div className="flex gap-2 items-center">
-                {/* Dil Butonları */}
                 <div className="flex bg-zinc-900 rounded p-1 mr-1 sm:mr-3 border border-zinc-800">
                   <button 
                     onClick={() => setLang('tr')} 
@@ -402,7 +510,6 @@
                   </button>
                 </div>
 
-                {/* Evren Butonları */}
                 {[
                   { label: t.all, value: 'All', activeColor: 'bg-zinc-700 text-white' }, 
                   { label: 'Marvel', value: 'Marvel', activeColor: 'bg-red-600 text-white shadow-lg shadow-red-500/20' }, 
@@ -527,7 +634,7 @@
                         </button>
                       </div>
 
-                      {/* --- CANLI SIRALAMA TABLOSU --- */}
+                      {/* --- GERÇEK CANLI SIRALAMA TABLOSU --- */}
                       <div className="w-full max-w-md mx-auto mt-8 text-left bg-zinc-950/50 p-4 sm:p-6 rounded-2xl border border-zinc-800">
                         <div className="flex justify-between items-end mb-4">
                           <h3 className="text-zinc-500 font-bold uppercase tracking-widest text-xs sm:text-sm">{t.leaderboard}</h3>
@@ -538,15 +645,32 @@
                           )}
                         </div>
                         <div className="flex flex-col gap-2">
-                          {leaderboard.slice(0, 10).map((entry, idx) => (
-                            <div key={entry.id} className={`flex items-center justify-between p-3 rounded-xl border ${entry.isUser && entry.id === currentRunId ? 'bg-yellow-500/10 border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'bg-zinc-900 border-zinc-800'}`}>
+                          {leaderboard.length === 0 && (
+                            <div className="text-center text-zinc-600 text-xs py-4 uppercase font-bold tracking-widest">Yükleniyor...</div>
+                          )}
+                          {/* İLK 10'U LİSTELE */}
+                          {top10.map((entry, idx) => (
+                            <div key={entry.id} className={`flex items-center justify-between p-3 rounded-xl border ${entry.id === currentRunId ? 'bg-yellow-500/10 border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'bg-zinc-900 border-zinc-800'}`}>
                               <div className="flex items-center gap-3 sm:gap-4">
-                                <span className={`font-black w-4 sm:w-6 text-center text-xs sm:text-sm ${entry.isUser && entry.id === currentRunId ? 'text-yellow-500' : 'text-zinc-500'}`}>{idx + 1}</span>
-                                <span className={`font-bold uppercase tracking-tighter text-xs sm:text-sm truncate max-w-[120px] sm:max-w-[180px] ${entry.isUser && entry.id === currentRunId ? 'text-yellow-400' : 'text-zinc-300'}`}>{entry.name}</span>
+                                <span className={`font-black w-4 sm:w-6 text-center text-xs sm:text-sm ${entry.id === currentRunId ? 'text-yellow-500' : 'text-zinc-500'}`}>{idx + 1}</span>
+                                <span className={`font-bold uppercase tracking-tighter text-xs sm:text-sm truncate max-w-[120px] sm:max-w-[180px] ${entry.id === currentRunId ? 'text-yellow-400' : 'text-zinc-300'}`}>{entry.name}</span>
                               </div>
-                              <span className={`font-black tracking-tighter text-sm sm:text-base ${entry.isUser && entry.id === currentRunId ? 'text-yellow-400' : 'text-zinc-100'}`}>{entry.score}</span>
+                              <span className={`font-black tracking-tighter text-sm sm:text-base ${entry.id === currentRunId ? 'text-yellow-400' : 'text-zinc-100'}`}>{entry.score}</span>
                             </div>
                           ))}
+                          {/* EĞER KULLANICI İLK 10'DA DEĞİLSE, EN ALTA ONU EKLE */}
+                          {userRank && !isUserInTop10 && (
+                            <>
+                              <div className="text-center text-zinc-600 font-black my-1">...</div>
+                              <div className="flex items-center justify-between p-3 rounded-xl border bg-yellow-500/10 border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.1)]">
+                                <div className="flex items-center gap-3 sm:gap-4">
+                                  <span className="font-black w-4 sm:w-6 text-center text-xs sm:text-sm text-yellow-500">{userRank}</span>
+                                  <span className="font-bold uppercase tracking-tighter text-xs sm:text-sm truncate max-w-[120px] sm:max-w-[180px] text-yellow-400">{heroName}</span>
+                                </div>
+                                <span className="font-black tracking-tighter text-sm sm:text-base text-yellow-400">{totalScore}</span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -554,7 +678,6 @@
                   )}
                 </div>
 
-                {/* Alt Kısım: MOBİLDE KESİN OLARAK 5 SÜTUN VE 2 SATIR (5x2) IZGARA */}
                 <div className="w-full max-w-4xl pb-10 relative px-1 sm:px-0">
                   <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
                     {CATEGORY_IDS.map((catId) => {
@@ -575,17 +698,14 @@
                                 : 'bg-zinc-950 border-zinc-900 border-dashed opacity-50'
                           }`}
                         >
-                          {/* Kısa İsim */}
                           <span className="text-[7px] sm:text-xs font-bold uppercase tracking-widest text-zinc-500 w-full text-center truncate">
                             {t.cats[catId].short}
                           </span>
 
-                          {/* Kahraman Adı */}
                           <span className={`text-[8px] sm:text-sm font-black uppercase text-center w-full truncate px-0.5 tracking-tighter ${!placedHero && isAvailable ? 'text-zinc-600' : 'text-zinc-200'}`}>
                             {placedHero ? placedHero.name : (isAvailable ? t.select : '---')}
                           </span>
 
-                          {/* Puanı */}
                           <span className="text-xs sm:text-xl font-black text-yellow-500 tracking-tighter min-h-[16px] sm:min-h-[28px]">
                             {placedHero ? placedHero.stats[catId] : ''}
                           </span>
@@ -594,7 +714,6 @@
                     })}
                   </div>
 
-                  {/* Dinamik Tooltip (Sadece üzerine gelindiğinde görünür) */}
                   {hoveredCategory && (
                     <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-white text-black text-[10px] sm:text-xs font-black uppercase tracking-widest px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-2xl pointer-events-none animate-in slide-in-from-bottom-2 duration-200 z-50 whitespace-nowrap">
                       {hoveredCategory}
