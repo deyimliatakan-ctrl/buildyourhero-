@@ -25,16 +25,22 @@
     const { useState, useEffect } = React;
 
     // --- Firebase Başlatma ---
+
+    
     let app, auth, db;
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'build-your-hero-app';
     try {
       const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-      app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getFirestore(app);
-    } catch (error) {
-      console.error("Firebase başlatılamadı:", error);
-    }
+  const myCustomFirebaseConfig = {
+      apiKey: "AIzaSyBGfbDHmKIqh30qIK33NONjkOBEGlXPO2s",
+  authDomain: "buildyourhero.firebaseapp.com",
+  databaseURL: "https://buildyourhero-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "buildyourhero",
+  storageBucket: "buildyourhero.firebasestorage.app",
+  messagingSenderId: "867278580042",
+  appId: "1:867278580042:web:7ecd0d9890a9128f5f39b3",
+  measurementId: "G-99QCXX7LMD"
+    };
 
     // --- İkonlar ---
     const TrophyIcon = ({ className }) => (
