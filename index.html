@@ -19,7 +19,7 @@
 
   <script type="text/babel" data-type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, collection, onSnapshot, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const { useState, useEffect } = React;
@@ -159,7 +159,10 @@
       { id: 'm98', name: 'Lizard', universe: 'Marvel', stats: { pow: 81, int: 88, spd: 70, dur: 85, com: 75, mag: 0, agi: 70, cha: 20, ldr: 10, cos: 0 } },
       { id: 'm99', name: 'Shocker', universe: 'Marvel', stats: { pow: 70, int: 65, spd: 50, dur: 55, com: 60, mag: 0, agi: 50, cha: 40, ldr: 30, cos: 0 } },
       { id: 'm100', name: 'Invisible Woman', universe: 'Marvel', stats: { pow: 60, int: 80, spd: 65, dur: 80, com: 65, mag: 30, agi: 74, cha: 100, ldr: 90, cos: 40 } },
-      
+      { id: 'm101', name: 'The Thing', universe: 'Marvel', stats: { pow: 95, int: 80, spd: 60, dur: 100, com: 85, mag: 0, agi: 10, cha: 70, ldr: 80, cos: 40 } },
+      { id: 'm102', name: 'Human Torch', universe: 'Marvel', stats: { pow: 80, int: 80, spd: 95, dur: 85, com: 82, mag: 20, agi: 90, cha: 90, ldr: 71, cos: 40 } },
+      { id: 'm103', name: 'Scorpion', universe: 'Marvel', stats: { pow: 75, int: 70, spd: 65, dur: 82, com: 77, mag: 0, agi: 71, cha: 52, ldr: 30, cos: 0 } },
+
       // ===================== DC =====================
       { id: 'd1', name: 'Superman', universe: 'DC', stats: { pow: 100, int: 80, spd: 98, dur: 99, com: 85, mag: 0, agi: 80, cha: 100, ldr: 95, cos: 90 } },
       { id: 'd2', name: 'Batman', universe: 'DC', stats: { pow: 85, int: 88, spd: 75, dur: 75, com: 97, mag: 10, agi: 75, cha: 100, ldr: 100, cos: 0 } },
@@ -216,7 +219,7 @@
     const CATEGORY_IDS = ['pow', 'int', 'spd', 'dur', 'com', 'mag', 'agi', 'cha', 'ldr', 'cos'];
     const MAX_SKIPS = 3;
 
-    // --- Dil Sözlüğü (TR & EN) ---
+    // --- Dil Sözlüğü ---
     const T = {
       tr: {
         heroCompleted: "TAMAMLANDI",
@@ -324,21 +327,23 @@
       const [user, setUser] = useState(null);
       const [leaderboard, setLeaderboard] = useState([]);
       const [currentRunId, setCurrentRunId] = useState(null);
+      const [isOffline, setIsOffline] = useState(false);
 
       const t = T[lang];
 
       // --- Firebase Auth ---
       useEffect(() => {
-        if (!auth) return;
+        if (!auth) {
+          setUser({ uid: 'local-user-' + Math.random().toString(36).substr(2, 9) });
+          setIsOffline(true);
+          return;
+        }
         const initAuth = async () => {
           try {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-              await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-              await signInAnonymously(auth);
-            }
+            await signInAnonymously(auth);
           } catch (error) {
             console.error("Giriş yapılamadı:", error);
+            setIsOffline(true);
           }
         };
         initAuth();
@@ -348,20 +353,35 @@
 
       // --- Firebase Firestore Leaderboard Dinleyici ---
       useEffect(() => {
-        if (!user || !db) return;
-        const lbRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+        if (isOffline || !db) {
+          const localData = localStorage.getItem('hero_leaderboard');
+          if (localData) {
+            setLeaderboard(JSON.parse(localData));
+          } else {
+            setLeaderboard([
+              { id: 'mock1', name: 'Galactus', score: 965, isUser: false },
+              { id: 'mock2', name: 'The Beyonder', score: 890, isUser: false },
+              { id: 'mock3', name: 'Cosmic King', score: 815, isUser: false }
+            ]);
+          }
+          return;
+        }
+
+        if (!user) return;
+
+        const lbRef = collection(db, 'artifacts', 'build-your-hero', 'public', 'data', 'leaderboard');
         
         const unsubscribe = onSnapshot(lbRef, (snapshot) => {
           const data = snapshot.docs.map(docItem => ({ id: docItem.id, ...docItem.data() }));
-          // Puanlarına göre en yüksekten en düşüğe sırala
           data.sort((a, b) => b.score - a.score);
           setLeaderboard(data);
         }, (error) => {
           console.error("Leaderboard verisi çekilemedi:", error);
+          setIsOffline(true);
         });
 
         return () => unsubscribe();
-      }, [user]);
+      }, [user, isOffline]);
 
       const selectRandomHero = (filter, usedIds) => {
         let pool = HEROES.filter(h => !usedIds.includes(h.id));
@@ -386,7 +406,6 @@
         }
       };
 
-      // Oyunu Başlat
       const startGame = () => {
         setHeroName(heroNameInput.trim() || t.anonHero);
         setGameStarted(true);
@@ -430,24 +449,32 @@
         setSlots(newSlots);
         setCurrentHero(null);
 
-        // Kahraman Tamamlandığında (10 slot doldu) Firestore'a Kaydet
+        // Kahraman Tamamlandı
         if (Object.keys(newSlots).length === 10) {
           const finalScore = Object.entries(newSlots).reduce((total, [cId, h]) => total + (h ? h.stats[cId] : 0), 0);
           setGameOver(true);
 
-          if (user && db) {
-            const lbRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
-            const newDocRef = doc(lbRef); // ID'yi önceden oluştur
-            
+          if (!isOffline && user && db) {
+            const lbRef = collection(db, 'artifacts', 'build-your-hero', 'public', 'data', 'leaderboard');
+            const newDocRef = doc(lbRef);
             setCurrentRunId(newDocRef.id);
-            
-            // Veritabanına yaz
             setDoc(newDocRef, {
               name: heroName,
               score: finalScore,
               userId: user.uid,
               timestamp: Date.now()
-            }).catch(error => console.error("Skor kaydedilemedi:", error));
+            }).catch(e => console.error("Skor kaydedilemedi:", e));
+          } else {
+            // Veritabanı yoksa Tarayıcı Hafızasına (LocalStorage) Kayıt
+            const runId = 'local-' + Date.now();
+            setCurrentRunId(runId);
+            const newEntry = { id: runId, name: heroName, score: finalScore, isUser: true };
+            
+            setLeaderboard(prev => {
+              const newLb = [...prev, newEntry].sort((a, b) => b.score - a.score);
+              localStorage.setItem('hero_leaderboard', JSON.stringify(newLb));
+              return newLb;
+            });
           }
         } else {
           drawHero();
@@ -480,13 +507,10 @@
 
       const heroLevel = getHeroLevel(totalScore, lang);
 
-      // --- Kullanıcının Canlı Sıralamasını Bul ---
       let userRank = null;
       if (currentRunId && leaderboard.length > 0) {
         const rankIndex = leaderboard.findIndex(e => e.id === currentRunId);
-        if (rankIndex !== -1) {
-          userRank = rankIndex + 1;
-        }
+        if (rankIndex !== -1) userRank = rankIndex + 1;
       }
 
       const top10 = leaderboard.slice(0, 10);
@@ -496,43 +520,22 @@
         <div className="min-h-screen flex flex-col relative">
           <header className="border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-50">
             <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-              
               <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
                 <h1 className="text-xl sm:text-2xl font-black italic uppercase tracking-tighter text-zinc-100 flex items-center gap-2">
                   BUILD YOUR <span className="text-zinc-500">HERO</span>
                 </h1>
               </div>
-              
               <div className="flex gap-2 items-center">
                 <div className="flex bg-zinc-900 rounded p-1 mr-1 sm:mr-3 border border-zinc-800">
-                  <button 
-                    onClick={() => setLang('tr')} 
-                    className={`px-2 py-1 text-[9px] sm:text-[10px] font-bold rounded transition-colors ${lang === 'tr' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}
-                  >
-                    TR
-                  </button>
-                  <button 
-                    onClick={() => setLang('en')} 
-                    className={`px-2 py-1 text-[9px] sm:text-[10px] font-bold rounded transition-colors ${lang === 'en' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}
-                  >
-                    EN
-                  </button>
+                  <button onClick={() => setLang('tr')} className={`px-2 py-1 text-[9px] sm:text-[10px] font-bold rounded transition-colors ${lang === 'tr' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}>TR</button>
+                  <button onClick={() => setLang('en')} className={`px-2 py-1 text-[9px] sm:text-[10px] font-bold rounded transition-colors ${lang === 'en' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}>EN</button>
                 </div>
-
                 {[
                   { label: t.all, value: 'All', activeColor: 'bg-zinc-700 text-white' }, 
                   { label: 'Marvel', value: 'Marvel', activeColor: 'bg-red-600 text-white shadow-lg shadow-red-500/20' }, 
                   { label: 'DC', value: 'DC', activeColor: 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' }
                 ].map(filter => (
-                  <button
-                    key={filter.value}
-                    onClick={() => handleUniverseChange(filter.value)}
-                    className={`px-3 sm:px-4 py-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded transition-all ${
-                      universeFilter === filter.value 
-                        ? filter.activeColor 
-                        : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
-                    }`}
-                  >
+                  <button key={filter.value} onClick={() => handleUniverseChange(filter.value)} className={`px-3 sm:px-4 py-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded transition-all ${universeFilter === filter.value ? filter.activeColor : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'}`}>
                     {filter.label}
                   </button>
                 ))}
@@ -541,46 +544,25 @@
           </header>
 
           <main className="flex-1 max-w-3xl mx-auto w-full px-2 sm:px-6 py-4 sm:py-6 flex flex-col items-center">
-            
             {!gameStarted ? (
-              /* --- BAŞLANGIÇ EKRANI --- */
               <div className="flex flex-col items-center justify-center w-full min-h-[60vh] px-2">
                  <div className="w-full max-w-md bg-zinc-900 p-8 sm:p-10 rounded-3xl border border-zinc-800 shadow-2xl animate-in zoom-in duration-500 text-center">
                     <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter mb-2 text-zinc-100">{t.enterHeroName}</h2>
                     <p className="text-zinc-500 text-xs sm:text-sm font-bold tracking-widest uppercase mb-8">{t.startDesc}</p>
-                    
-                    <input 
-                      type="text" 
-                      value={heroNameInput}
-                      onChange={(e) => setHeroNameInput(e.target.value)}
-                      placeholder={t.placeholder}
-                      maxLength={15}
-                      className="w-full bg-zinc-950 border-2 border-zinc-800 rounded-2xl px-6 py-4 text-center font-black text-xl text-white outline-none focus:border-zinc-500 transition-colors mb-6 uppercase tracking-widest placeholder:text-zinc-700"
-                      onKeyDown={(e) => { if(e.key === 'Enter') startGame(); }}
-                    />
-                    
-                    <button 
-                      onClick={startGame}
-                      className="w-full py-4 bg-zinc-100 text-zinc-950 rounded-2xl font-black uppercase tracking-widest hover:bg-white hover:scale-[1.02] active:scale-95 transition-all"
-                    >
+                    <input type="text" value={heroNameInput} onChange={(e) => setHeroNameInput(e.target.value)} placeholder={t.placeholder} maxLength={15} className="w-full bg-zinc-950 border-2 border-zinc-800 rounded-2xl px-6 py-4 text-center font-black text-xl text-white outline-none focus:border-zinc-500 transition-colors mb-6 uppercase tracking-widest placeholder:text-zinc-700" onKeyDown={(e) => { if(e.key === 'Enter') startGame(); }} />
+                    <button onClick={startGame} className="w-full py-4 bg-zinc-100 text-zinc-950 rounded-2xl font-black uppercase tracking-widest hover:bg-white hover:scale-[1.02] active:scale-95 transition-all">
                       {t.start}
                     </button>
                  </div>
               </div>
             ) : (
-              /* --- OYUN & BİTİŞ EKRANI --- */
               <>
                 <div className="flex flex-col items-center justify-center w-full min-h-[200px] mb-6 sm:mb-8">
                   {!gameOver ? (
                     currentHero ? (
                       <div className="w-full max-w-lg text-center bg-zinc-900 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-zinc-800 shadow-2xl animate-in fade-in zoom-in duration-500">
-                        <p className={`font-black tracking-widest uppercase text-[10px] sm:text-xs mb-1 sm:mb-2 ${currentHero.universe === 'Marvel' ? 'text-red-500' : 'text-blue-500'}`}>
-                          {currentHero.universe}
-                        </p>
-                        <h2 className="text-3xl sm:text-5xl font-black uppercase tracking-tighter mb-4 sm:mb-6 text-zinc-100 px-2">
-                          {currentHero.name}
-                        </h2>
-                        
+                        <p className={`font-black tracking-widest uppercase text-[10px] sm:text-xs mb-1 sm:mb-2 ${currentHero.universe === 'Marvel' ? 'text-red-500' : 'text-blue-500'}`}>{currentHero.universe}</p>
+                        <h2 className="text-3xl sm:text-5xl font-black uppercase tracking-tighter mb-4 sm:mb-6 text-zinc-100 px-2">{currentHero.name}</h2>
                         <div className="grid grid-cols-5 gap-1 sm:gap-3 mb-6 sm:mb-8 w-full">
                           {CATEGORY_IDS.map(id => (
                             <div key={id} className="flex flex-col items-center bg-black/50 p-1.5 sm:p-2 rounded-lg border border-zinc-800/50 w-full">
@@ -589,35 +571,18 @@
                             </div>
                           ))}
                         </div>
-
-                        <button
-                          onClick={handleSkip}
-                          disabled={skipsLeft === 0}
-                          className={`inline-flex items-center gap-1 sm:gap-2 px-5 sm:px-6 py-2 sm:py-3 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all ${
-                            skipsLeft > 0 
-                              ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white border border-zinc-700' 
-                              : 'bg-zinc-950 text-zinc-700 border border-zinc-900 cursor-not-allowed opacity-50'
-                          }`}
-                        >
-                          <SkipForwardIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                          {t.skip} ({skipsLeft})
+                        <button onClick={handleSkip} disabled={skipsLeft === 0} className={`inline-flex items-center gap-1 sm:gap-2 px-5 sm:px-6 py-2 sm:py-3 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all ${skipsLeft > 0 ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white border border-zinc-700' : 'bg-zinc-950 text-zinc-700 border border-zinc-900 cursor-not-allowed opacity-50'}`}>
+                          <SkipForwardIcon className="w-3 h-3 sm:w-4 sm:h-4" /> {t.skip} ({skipsLeft})
                         </button>
                       </div>
                     ) : (
-                      <div className="text-zinc-600 animate-pulse font-bold uppercase tracking-widest text-sm">
-                        {t.searching}
-                      </div>
+                      <div className="text-zinc-600 animate-pulse font-bold uppercase tracking-widest text-sm">{t.searching}</div>
                     )
                   ) : (
                     <div className="w-full text-center bg-zinc-900 p-6 sm:p-8 rounded-2xl sm:rounded-3xl border border-zinc-800 shadow-2xl animate-in zoom-in duration-500">
                       <TrophyIcon className={`w-12 h-12 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 ${totalScore >= 950 ? 'text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]' : 'text-zinc-100'}`} />
-                      
-                      <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter mb-2 text-yellow-400">
-                        {heroName}
-                      </h2>
-                      <p className="text-lg sm:text-xl font-bold uppercase tracking-widest text-zinc-300 mb-6">
-                        {t.heroCompleted}
-                      </p>
+                      <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter mb-2 text-yellow-400">{heroName}</h2>
+                      <p className="text-lg sm:text-xl font-bold uppercase tracking-widest text-zinc-300 mb-6">{t.heroCompleted}</p>
                       
                       <div className="mb-6 sm:mb-8">
                         <span className="text-xs sm:text-sm text-zinc-500 font-bold uppercase tracking-widest block mb-1">{t.totalScore}</span>
@@ -629,35 +594,23 @@
                         <p className={`text-lg sm:text-2xl font-black uppercase tracking-tighter ${totalScore >= 950 ? 'text-yellow-400' : 'text-zinc-100'}`}>{heroLevel.title}</p>
                       </div>
 
-                      <p className="text-zinc-400 text-xs sm:text-sm max-w-md mx-auto mb-6 sm:mb-8 px-2 italic">
-                        "{heroLevel.desc}"
-                      </p>
+                      <p className="text-zinc-400 text-xs sm:text-sm max-w-md mx-auto mb-6 sm:mb-8 px-2 italic">"{heroLevel.desc}"</p>
 
                       <div>
-                        <button
-                          onClick={handleReset}
-                          className="inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-4 bg-zinc-100 text-zinc-950 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-white hover:scale-105 transition-all"
-                        >
-                          <RefreshCcwIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                          {t.playAgain}
+                        <button onClick={handleReset} className="inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-4 bg-zinc-100 text-zinc-950 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-white hover:scale-105 transition-all">
+                          <RefreshCcwIcon className="w-3 h-3 sm:w-4 sm:h-4" /> {t.playAgain}
                         </button>
                       </div>
 
-                      {/* --- GERÇEK CANLI SIRALAMA TABLOSU --- */}
                       <div className="w-full max-w-md mx-auto mt-8 text-left bg-zinc-950/50 p-4 sm:p-6 rounded-2xl border border-zinc-800">
                         <div className="flex justify-between items-end mb-4">
                           <h3 className="text-zinc-500 font-bold uppercase tracking-widest text-xs sm:text-sm">{t.leaderboard}</h3>
                           {userRank && (
-                            <span className="text-yellow-500 font-black uppercase tracking-tighter text-sm sm:text-base">
-                              {t.yourRank}: #{userRank}
-                            </span>
+                            <span className="text-yellow-500 font-black uppercase tracking-tighter text-sm sm:text-base">{t.yourRank}: #{userRank}</span>
                           )}
                         </div>
                         <div className="flex flex-col gap-2">
-                          {leaderboard.length === 0 && (
-                            <div className="text-center text-zinc-600 text-xs py-4 uppercase font-bold tracking-widest">Yükleniyor...</div>
-                          )}
-                          {/* İLK 10'U LİSTELE */}
+                          {leaderboard.length === 0 && <div className="text-center text-zinc-600 text-xs py-4 uppercase font-bold tracking-widest">Yükleniyor...</div>}
                           {top10.map((entry, idx) => (
                             <div key={entry.id} className={`flex items-center justify-between p-3 rounded-xl border ${entry.id === currentRunId ? 'bg-yellow-500/10 border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'bg-zinc-900 border-zinc-800'}`}>
                               <div className="flex items-center gap-3 sm:gap-4">
@@ -667,7 +620,6 @@
                               <span className={`font-black tracking-tighter text-sm sm:text-base ${entry.id === currentRunId ? 'text-yellow-400' : 'text-zinc-100'}`}>{entry.score}</span>
                             </div>
                           ))}
-                          {/* EĞER KULLANICI İLK 10'DA DEĞİLSE, EN ALTA ONU EKLE */}
                           {userRank && !isUserInTop10 && (
                             <>
                               <div className="text-center text-zinc-600 font-black my-1">...</div>
@@ -692,37 +644,15 @@
                     {CATEGORY_IDS.map((catId) => {
                       const placedHero = slots[catId];
                       const isAvailable = !placedHero && !gameOver;
-                      
                       return (
-                        <div
-                          key={catId}
-                          onClick={() => isAvailable && handlePlaceHero(catId)}
-                          onMouseEnter={() => setHoveredCategory(t.cats[catId].full)}
-                          onMouseLeave={() => setHoveredCategory(null)}
-                          className={`relative flex flex-col items-center justify-between p-1.5 sm:p-4 rounded-xl sm:rounded-2xl border sm:border-2 transition-all duration-200 h-16 sm:h-28 ${
-                            placedHero
-                              ? 'bg-zinc-800 border-zinc-700'
-                              : isAvailable
-                                ? 'bg-zinc-900 border-zinc-800 border-dashed hover:border-zinc-500 hover:bg-zinc-800 cursor-pointer'
-                                : 'bg-zinc-950 border-zinc-900 border-dashed opacity-50'
-                          }`}
-                        >
-                          <span className="text-[7px] sm:text-xs font-bold uppercase tracking-widest text-zinc-500 w-full text-center truncate">
-                            {t.cats[catId].short}
-                          </span>
-
-                          <span className={`text-[8px] sm:text-sm font-black uppercase text-center w-full truncate px-0.5 tracking-tighter ${!placedHero && isAvailable ? 'text-zinc-600' : 'text-zinc-200'}`}>
-                            {placedHero ? placedHero.name : (isAvailable ? t.select : '---')}
-                          </span>
-
-                          <span className="text-xs sm:text-xl font-black text-yellow-500 tracking-tighter min-h-[16px] sm:min-h-[28px]">
-                            {placedHero ? placedHero.stats[catId] : ''}
-                          </span>
+                        <div key={catId} onClick={() => isAvailable && handlePlaceHero(catId)} onMouseEnter={() => setHoveredCategory(t.cats[catId].full)} onMouseLeave={() => setHoveredCategory(null)} className={`relative flex flex-col items-center justify-between p-1.5 sm:p-4 rounded-xl sm:rounded-2xl border sm:border-2 transition-all duration-200 h-16 sm:h-28 ${placedHero ? 'bg-zinc-800 border-zinc-700' : isAvailable ? 'bg-zinc-900 border-zinc-800 border-dashed hover:border-zinc-500 hover:bg-zinc-800 cursor-pointer' : 'bg-zinc-950 border-zinc-900 border-dashed opacity-50'}`}>
+                          <span className="text-[7px] sm:text-xs font-bold uppercase tracking-widest text-zinc-500 w-full text-center truncate">{t.cats[catId].short}</span>
+                          <span className={`text-[8px] sm:text-sm font-black uppercase text-center w-full truncate px-0.5 tracking-tighter ${!placedHero && isAvailable ? 'text-zinc-600' : 'text-zinc-200'}`}>{placedHero ? placedHero.name : (isAvailable ? t.select : '---')}</span>
+                          <span className="text-xs sm:text-xl font-black text-yellow-500 tracking-tighter min-h-[16px] sm:min-h-[28px]">{placedHero ? placedHero.stats[catId] : ''}</span>
                         </div>
                       );
                     })}
                   </div>
-
                   {hoveredCategory && (
                     <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-white text-black text-[10px] sm:text-xs font-black uppercase tracking-widest px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-2xl pointer-events-none animate-in slide-in-from-bottom-2 duration-200 z-50 whitespace-nowrap">
                       {hoveredCategory}
